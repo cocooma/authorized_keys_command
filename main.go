@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"os"
@@ -22,14 +23,20 @@ func ec2Metadata() (region, instanceID, accountID string) {
 	return
 }
 
-func getTagValue(tagName, instanceID, region string) (value string, err error) {
-	svc := ec2.New(session.Must(session.NewSession((&aws.Config{Region: aws.String(region)}))))
+type Tag struct {
+	Client     ec2iface.EC2API
+	TagName    string
+	InstanceId string
+	Region     string
+}
+
+func (t *Tag) getTagValue() (value string, err error) {
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{
-			aws.String(instanceID),
+			aws.String(t.InstanceId),
 		},
 	}
-	resp, err := svc.DescribeInstances(params)
+	resp, err := t.Client.DescribeInstances(params)
 	if err != nil {
 		fmt.Printf("%s", err)
 		return "", err
@@ -37,10 +44,11 @@ func getTagValue(tagName, instanceID, region string) (value string, err error) {
 	if len(resp.Reservations) == 0 {
 		return "", err
 	}
+
 	for idx := range resp.Reservations {
 		for _, inst := range resp.Reservations[idx].Instances {
 			for _, tag := range inst.Tags {
-				if (tagName != "") && (*tag.Key == tagName) {
+				if (t.TagName != "") && (*tag.Key == t.TagName) {
 					return *tag.Value, nil
 				}
 			}
@@ -134,7 +142,16 @@ func main() {
 
 	region, instanceID, accountID := ec2Metadata()
 
-	authAccountArn, _ := getTagValue("auth-account-arn", instanceID, region)
+	//authAccountArn, _ := getTagValue("auth-account-arn", instanceID, region)
+	sess := session.Must(session.NewSession((&aws.Config{Region: aws.String(region)})))
+
+	t := Tag{
+		Client:     ec2.New(sess),
+		TagName:    "auth-account-arn",
+		InstanceId: instanceID,
+		Region:     region,
+	}
+	authAccountArn, _ := t.getTagValue()
 
 	accessKeyId, secretAccessKey, sessionToken := getAccessKeyIdSecretAccessKeySessionToken(authAccountArn, userid, accountID)
 
