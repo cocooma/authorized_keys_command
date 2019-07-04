@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 	"os"
 )
 
@@ -57,14 +58,20 @@ func (t *Tag) getTagValue() (value string, err error) {
 	return
 }
 
-func getAccessKeyIdSecretAccessKeySessionToken(authAccountArn, userid, accountID string) (accessKeyId, secretAccessKey, sessionToken string) {
-	svc := sts.New(session.Must(session.NewSession()))
-	input := &sts.AssumeRoleInput{
+type AccessKeyIdSecretAccessKeySessionToken struct {
+	Client         stsiface.STSAPI
+	AuthAccountArn string
+	UserId         string
+	AccountID      string
+}
+
+func (a *AccessKeyIdSecretAccessKeySessionToken) getAccessKeyIdSecretAccessKeySessionToken() (accessKeyId, secretAccessKey, sessionToken string) {
+	params := &sts.AssumeRoleInput{
 		DurationSeconds: aws.Int64(3600),
-		RoleArn:         aws.String(authAccountArn),
-		RoleSessionName: aws.String("auth_keys_cmd_" + userid + "_" + accountID),
+		RoleArn:         aws.String(a.AuthAccountArn),
+		RoleSessionName: aws.String("auth_keys_cmd_" + a.UserId + "_" + a.AccountID),
 	}
-	result, _ := svc.AssumeRole(input)
+	result, _ := a.Client.AssumeRole(params)
 	accessKeyId = *result.Credentials.AccessKeyId
 	secretAccessKey = *result.Credentials.SecretAccessKey
 	sessionToken = *result.Credentials.SessionToken
@@ -142,7 +149,6 @@ func main() {
 
 	region, instanceID, accountID := ec2Metadata()
 
-	//authAccountArn, _ := getTagValue("auth-account-arn", instanceID, region)
 	sess := session.Must(session.NewSession((&aws.Config{Region: aws.String(region)})))
 
 	t := Tag{
@@ -151,9 +157,17 @@ func main() {
 		InstanceId: instanceID,
 		Region:     region,
 	}
+
 	authAccountArn, _ := t.getTagValue()
 
-	accessKeyId, secretAccessKey, sessionToken := getAccessKeyIdSecretAccessKeySessionToken(authAccountArn, userid, accountID)
+	a := AccessKeyIdSecretAccessKeySessionToken{
+		Client:         sts.New(sess),
+		AuthAccountArn: authAccountArn,
+		UserId:         userid,
+		AccountID:      accountID,
+	}
+
+	accessKeyId, secretAccessKey, sessionToken := a.getAccessKeyIdSecretAccessKeySessionToken()
 
 	listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid)
 

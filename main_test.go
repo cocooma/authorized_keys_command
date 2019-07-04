@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	//"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 	"testing"
 )
 
@@ -56,6 +60,63 @@ func TestGetTagValue(t *testing.T) {
 
 		if tagValue != expectedTagValue {
 			t.Fatalf("Something went wrong expecting TagValue: %v and I've got: %v", expectedTagValue, tagValue)
+		}
+	}
+}
+
+type mockedAccessKeyIdSecretAccessKeySessionToken struct {
+	stsiface.STSAPI
+	Resp sts.AssumeRoleOutput
+}
+
+func (m mockedAccessKeyIdSecretAccessKeySessionToken) AssumeRole(in *sts.AssumeRoleInput) (*sts.AssumeRoleOutput, error) {
+	return &m.Resp, nil
+}
+
+func TestGetAccessKeyIdSecretAccessKeySessionToken(t *testing.T) {
+	cases := []struct {
+		Resp     sts.AssumeRoleOutput
+		Expected sts.Credentials
+	}{
+		{
+			Resp: sts.AssumeRoleOutput{
+				AssumedRoleUser: &sts.AssumedRoleUser{
+					AssumedRoleId: aws.String("asda"),
+					Arn:           aws.String("dsa"),
+				},
+				Credentials: &sts.Credentials{
+					AccessKeyId:     aws.String("accesskeyid"),
+					SecretAccessKey: aws.String("secrectaccesskey"),
+					SessionToken:    aws.String("sessiontoken"),
+				},
+			},
+			Expected: sts.Credentials{
+				AccessKeyId:     aws.String("accesskeyid"),
+				SecretAccessKey: aws.String("secrectaccesskey"),
+				SessionToken:    aws.String("sessiontoken"),
+			},
+		},
+	}
+
+	for _, c := range cases {
+		fmt.Println(c.Resp)
+		at := AccessKeyIdSecretAccessKeySessionToken{
+			Client:         mockedAccessKeyIdSecretAccessKeySessionToken{Resp: c.Resp},
+			AuthAccountArn: "auth-account-arn",
+			UserId:         "UserId",
+			AccountID:      "Region",
+		}
+
+		accessKeyId, secretAccessKey, sessionToken := at.getAccessKeyIdSecretAccessKeySessionToken()
+
+		if accessKeyId != *c.Expected.AccessKeyId {
+			t.Fatalf("Something went wrong expecting AccesskeyId: %v and I've got: %v", *c.Expected.AccessKeyId, accessKeyId)
+		}
+		if secretAccessKey != *c.Expected.SecretAccessKey {
+			t.Fatalf("Something went wrong expecting SecrectAccessKey: %v and I've got: %v", *c.Expected.SecretAccessKey, secretAccessKey)
+		}
+		if sessionToken != *c.Expected.SessionToken {
+			t.Fatalf("Something went wrong expecting SessionToken: %v and I've got: %v", *c.Expected.SessionToken, sessionToken)
 		}
 	}
 }
