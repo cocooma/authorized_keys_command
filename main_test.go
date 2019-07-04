@@ -22,7 +22,8 @@ func (m mockedGetTagValue) DescribeInstances(in *ec2.DescribeInstancesInput) (*e
 
 func TestGetTagValue(t *testing.T) {
 	cases := []struct {
-		Resp ec2.DescribeInstancesOutput
+		Resp     ec2.DescribeInstancesOutput
+		Expected ec2.Tag
 	}{
 		{
 			Resp: ec2.DescribeInstancesOutput{
@@ -40,6 +41,9 @@ func TestGetTagValue(t *testing.T) {
 					},
 				},
 			},
+			Expected: ec2.Tag{
+				Value: aws.String("arn:aws:iam::638924580364:role/RoleCrossAccountSSH"),
+			},
 		},
 	}
 
@@ -50,7 +54,6 @@ func TestGetTagValue(t *testing.T) {
 			InstanceId: "InstanceId_%d",
 			Region:     "Region",
 		}
-		expectedTagValue := "arn:aws:iam::638924580364:role/RoleCrossAccountSSH"
 
 		tagValue, err := tv.getTagValue()
 
@@ -58,8 +61,8 @@ func TestGetTagValue(t *testing.T) {
 			t.Fatalf("%d, unexpected error", err)
 		}
 
-		if tagValue != expectedTagValue {
-			t.Fatalf("Something went wrong expecting TagValue: %v and I've got: %v", expectedTagValue, tagValue)
+		if tagValue != *c.Expected.Value {
+			t.Fatalf("Something went wrong expecting TagValue: %v and I've got: %v", *c.Expected.Value, tagValue)
 		}
 	}
 }
