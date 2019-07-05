@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
-	//"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 	"testing"
@@ -83,10 +84,6 @@ func TestGetAccessKeyIdSecretAccessKeySessionToken(t *testing.T) {
 	}{
 		{
 			Resp: sts.AssumeRoleOutput{
-				AssumedRoleUser: &sts.AssumedRoleUser{
-					AssumedRoleId: aws.String("asda"),
-					Arn:           aws.String("dsa"),
-				},
 				Credentials: &sts.Credentials{
 					AccessKeyId:     aws.String("accesskeyid"),
 					SecretAccessKey: aws.String("secrectaccesskey"),
@@ -102,7 +99,6 @@ func TestGetAccessKeyIdSecretAccessKeySessionToken(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		fmt.Println(c.Resp)
 		at := AccessKeyIdSecretAccessKeySessionToken{
 			Client:         mockedAccessKeyIdSecretAccessKeySessionToken{Resp: c.Resp},
 			AuthAccountArn: "auth-account-arn",
@@ -120,6 +116,57 @@ func TestGetAccessKeyIdSecretAccessKeySessionToken(t *testing.T) {
 		}
 		if sessionToken != *c.Expected.SessionToken {
 			t.Fatalf("Something went wrong expecting SessionToken: %v and I've got: %v", *c.Expected.SessionToken, sessionToken)
+		}
+	}
+}
+
+type mockedGetPubKey struct {
+	iamiface.IAMAPI
+	Resp    iam.GetSSHPublicKeyOutput
+	Request request.Request
+}
+
+func (m mockedGetPubKey) GetSSHPublicKeyRequest(in *iam.GetSSHPublicKeyInput) (*request.Request, *iam.GetSSHPublicKeyOutput) {
+	return &m.Request, &m.Resp
+}
+
+func TestGetPubKey(t *testing.T) {
+	cases := []struct {
+		Request  request.Request
+		Resp     iam.GetSSHPublicKeyOutput
+		Expected iam.SSHPublicKey
+	}{
+		{
+			Resp: iam.GetSSHPublicKeyOutput{
+				SSHPublicKey: &iam.SSHPublicKey{
+					Status:           aws.String("Active"),
+					SSHPublicKeyId:   aws.String("oszkar.nagy"),
+					SSHPublicKeyBody: aws.String("SSHPublicKeyBody"),
+				},
+			},
+			Expected: iam.SSHPublicKey{
+				SSHPublicKeyBody: aws.String("SSHPublicKeyBody"),
+			},
+		},
+	}
+
+	for _, c := range cases {
+		pk := GetPubKey{
+			Client: mockedGetPubKey{
+				Request: c.Request,
+				Resp:    c.Resp,
+			},
+			Region:          "eu-west-2",
+			UserID:          "oszkar.nagy",
+			SecretAccessKey: "secrectaccesskey",
+			AccessKeyId:     "accesskeyid",
+			SessionToken:    "sessiontoken",
+		}
+
+		pubKey := pk.getPubKey("oszkar.nagy")
+
+		if pubKey != *c.Expected.SSHPublicKeyBody {
+			t.Fatalf("Something went wrong expecting pubKey: %v and I've got: %v", *c.Expected.SSHPublicKeyBody, pubKey)
 		}
 	}
 }

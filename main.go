@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 	"os"
@@ -78,61 +79,39 @@ func (a *AccessKeyIdSecretAccessKeySessionToken) getAccessKeyIdSecretAccessKeySe
 	return
 }
 
-func getPubKey(region, userID, sSHPublicKeyId, secretAccessKey, accessKeyId, sessionToken string) {
-	svc := iam.New(session.New(&aws.Config{
-		Region: aws.String(region),
-		Credentials: credentials.NewChainCredentials(
-			[]credentials.Provider{
-				&credentials.StaticProvider{
-					Value: credentials.Value{
-						AccessKeyID:     accessKeyId,
-						SecretAccessKey: secretAccessKey,
-						SessionToken:    sessionToken,
-					},
-				},
-				&credentials.EnvProvider{},
-				&credentials.SharedCredentialsProvider{},
-				defaults.RemoteCredProvider(*(defaults.Config()), defaults.Handlers()),
-			}),
-	}))
-	params := &iam.GetSSHPublicKeyInput{
-		Encoding:       aws.String("SSH"),
-		SSHPublicKeyId: aws.String(sSHPublicKeyId),
-		UserName:       aws.String(userID),
-	}
-
-	req, resp := svc.GetSSHPublicKeyRequest(params)
-	req.Send()
-	fmt.Println(*resp.SSHPublicKey.SSHPublicKeyBody)
+type GetPubKey struct {
+	Client          iamiface.IAMAPI
+	Region          string
+	UserID          string
+	SecretAccessKey string
+	AccessKeyId     string
+	SessionToken    string
 }
 
-func listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid string) {
-	svc := iam.New(session.New(&aws.Config{
-		Region: aws.String(region),
-		Credentials: credentials.NewChainCredentials(
-			[]credentials.Provider{
-				&credentials.StaticProvider{
-					Value: credentials.Value{
-						AccessKeyID:     accessKeyId,
-						SecretAccessKey: secretAccessKey,
-						SessionToken:    sessionToken,
-					},
-				},
-				&credentials.EnvProvider{},
-				&credentials.SharedCredentialsProvider{},
-				defaults.RemoteCredProvider(*(defaults.Config()), defaults.Handlers()),
-			}),
-	}))
+func (g *GetPubKey) getPubKey(SshPublicKeyId string) (pubKey string) {
+	params := &iam.GetSSHPublicKeyInput{
+		Encoding:       aws.String("SSH"),
+		SSHPublicKeyId: aws.String(SshPublicKeyId),
+		UserName:       aws.String(g.UserID),
+	}
+
+	req, resp := g.Client.GetSSHPublicKeyRequest(params)
+	req.Send()
+	pubKey = *resp.SSHPublicKey.SSHPublicKeyBody
+	return
+}
+
+func (g *GetPubKey) listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid string) {
 	param := &iam.ListSSHPublicKeysInput{
 		UserName: aws.String(userid),
 	}
-	req, resp := svc.ListSSHPublicKeysRequest(param)
+	req, resp := g.Client.ListSSHPublicKeysRequest(param)
 	err := req.Send()
 	if err == nil { // resp is now filled
 		for _, SSHPublicKey := range resp.SSHPublicKeys {
 			if *SSHPublicKey.Status == "Active" {
 				sSHPublicKeyId := *SSHPublicKey.SSHPublicKeyId
-				getPubKey(region, userid, sSHPublicKeyId, secretAccessKey, accessKeyId, sessionToken)
+				fmt.Println(g.getPubKey(sSHPublicKeyId))
 			}
 		}
 	}
@@ -149,7 +128,7 @@ func main() {
 
 	region, instanceID, accountID := ec2Metadata()
 
-	sess := session.Must(session.NewSession((&aws.Config{Region: aws.String(region)})))
+	sess := session.Must(session.NewSession(&aws.Config{Region: aws.String(region)}))
 
 	t := Tag{
 		Client:     ec2.New(sess),
@@ -169,6 +148,32 @@ func main() {
 
 	accessKeyId, secretAccessKey, sessionToken := a.getAccessKeyIdSecretAccessKeySessionToken()
 
-	listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid)
+	assumedSess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(region),
+		Credentials: credentials.NewChainCredentials(
+			[]credentials.Provider{
+				&credentials.StaticProvider{
+					Value: credentials.Value{
+						AccessKeyID:     accessKeyId,
+						SecretAccessKey: secretAccessKey,
+						SessionToken:    sessionToken,
+					},
+				},
+				&credentials.EnvProvider{},
+				&credentials.SharedCredentialsProvider{},
+				defaults.RemoteCredProvider(*(defaults.Config()), defaults.Handlers()),
+			}),
+	}))
+
+	g := GetPubKey{
+		Client:          iam.New(assumedSess),
+		Region:          region,
+		UserID:          userid,
+		SecretAccessKey: secretAccessKey,
+		AccessKeyId:     secretAccessKey,
+		SessionToken:    sessionToken,
+	}
+
+	g.listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid)
 
 }
