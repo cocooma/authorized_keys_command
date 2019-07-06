@@ -16,6 +16,8 @@ import (
 	"os"
 )
 
+var version string
+
 func ec2Metadata(sess *session.Session, awsCfg *aws.Config) (region, instanceID, accountID string) {
 	client := ec2metadata.New(sess, awsCfg)
 	ec2InstanceIdentifyDocument, _ := client.GetInstanceIdentityDocument()
@@ -132,7 +134,10 @@ func (g *PubKey) getActivePubKey(SSHPublicKeys []*iam.SSHPublicKeyMetadata) (sSH
 func main() {
 
 	userid := ""
-	if len(os.Args) > 1 {
+	if os.Args[1] == "--version" {
+		fmt.Printf("Authorized Keys Command Version: %s\n", version)
+		os.Exit(0)
+	} else if len(os.Args) > 1 {
 		userid = os.Args[1]
 	} else {
 		os.Exit(0)

@@ -33,7 +33,7 @@ const instanceIdentityDocument = `{
   "architecture" : "x86_64"
 }`
 
-type IDDocument struct {
+type IIDocument struct {
 	AvailabilityZone string      `json:"availabilityZone"`
 	PrivateIP        string      `json:"privateIp"`
 	Version          string      `json:"version"`
@@ -49,7 +49,7 @@ type IDDocument struct {
 	Architecture     string      `json:"architecture"`
 }
 
-var iDDocument IDDocument
+var iIDocument IIDocument
 
 func initTestServer(path string, resp string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,16 +70,16 @@ func TestEC2Metadata(t *testing.T) {
 
 	region, instanceID, accountID := ec2Metadata(unit.Session, &aws.Config{Endpoint: aws.String(server.URL + "/latest")})
 
-	json.Unmarshal([]byte(instanceIdentityDocument), &iDDocument)
+	json.Unmarshal([]byte(instanceIdentityDocument), &iIDocument)
 
-	if region != iDDocument.Region {
-		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iDDocument.Region)
+	if region != iIDocument.Region {
+		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iIDocument.Region)
 	}
-	if instanceID != iDDocument.InstanceID {
-		t.Fatalf("Something went wrong expecting instanceID: %v and I've got: %v", instanceID, iDDocument.InstanceID)
+	if instanceID != iIDocument.InstanceID {
+		t.Fatalf("Something went wrong expecting instanceID: %v and I've got: %v", instanceID, iIDocument.InstanceID)
 	}
-	if accountID != iDDocument.AccountID {
-		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iDDocument.AccountID)
+	if accountID != iIDocument.AccountID {
+		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iIDocument.AccountID)
 	}
 
 }
@@ -107,7 +107,7 @@ func TestGetTagValue(t *testing.T) {
 								Tags: []*ec2.Tag{
 									{
 										Key:   aws.String("auth-account-arn"),
-										Value: aws.String("arn:aws:iam::638924580364:role/RoleCrossAccountSSH")},
+										Value: aws.String("arn:aws:iam::434342352745:role/RoleCrossAccountSSH")},
 								},
 							},
 						},
@@ -115,7 +115,7 @@ func TestGetTagValue(t *testing.T) {
 				},
 			},
 			Expected: ec2.Tag{
-				Value: aws.String("arn:aws:iam::638924580364:role/RoleCrossAccountSSH"),
+				Value: aws.String("arn:aws:iam::434342352745:role/RoleCrossAccountSSH"),
 			},
 		},
 	}
@@ -207,8 +207,6 @@ func TestGetPubKey(t *testing.T) {
 		{
 			Resp: iam.GetSSHPublicKeyOutput{
 				SSHPublicKey: &iam.SSHPublicKey{
-					Status:           aws.String("Active"),
-					SSHPublicKeyId:   aws.String("user.name"),
 					SSHPublicKeyBody: aws.String("SSHPublicKeyBody"),
 				},
 			},
@@ -319,7 +317,6 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 			},
 			Expected: []*iam.SSHPublicKey{
 				{
-					Status:         aws.String("Active"),
 					SSHPublicKeyId: aws.String("user1.name"),
 				},
 			},
@@ -365,7 +362,6 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 			},
 			Expected: []*iam.SSHPublicKey{
 				{
-					Status:         aws.String("Inactive"),
 					SSHPublicKeyId: aws.String(""),
 				},
 			},
