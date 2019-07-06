@@ -1,16 +1,88 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/awstesting/unit"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+const instanceIdentityDocument = `{
+  "availabilityZone" : "us-east-1d",
+  "privateIp" : "10.158.112.84",
+  "version" : "2010-08-31",
+  "region" : "us-east-1",
+  "instanceId" : "i-1234567890abcdef0",
+  "billingProducts" : null,
+  "instanceType" : "t1.micro",
+  "accountId" : "123456789012",
+  "pendingTime" : "2015-11-19T16:32:11Z",
+  "imageId" : "ami-5fb8c835",
+  "kernelId" : "aki-919dcaf8",
+  "ramdiskId" : null,
+  "architecture" : "x86_64"
+}`
+
+type IDDocument struct {
+	AvailabilityZone string      `json:"availabilityZone"`
+	PrivateIP        string      `json:"privateIp"`
+	Version          string      `json:"version"`
+	Region           string      `json:"region"`
+	InstanceID       string      `json:"instanceId"`
+	BillingProducts  interface{} `json:"billingProducts"`
+	InstanceType     string      `json:"instanceType"`
+	AccountID        string      `json:"accountId"`
+	PendingTime      time.Time   `json:"pendingTime"`
+	ImageID          string      `json:"imageId"`
+	KernelID         string      `json:"kernelId"`
+	RamdiskID        interface{} `json:"ramdiskId"`
+	Architecture     string      `json:"architecture"`
+}
+
+var iDDocument IDDocument
+
+func initTestServer(path string, resp string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI != path {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Write([]byte(resp))
+	}))
+}
+
+func TestEC2Metadata(t *testing.T) {
+	server := initTestServer(
+		"/latest/dynamic/instance-identity/document",
+		instanceIdentityDocument,
+	)
+	defer server.Close()
+
+	region, instanceID, accountID := ec2Metadata(unit.Session, &aws.Config{Endpoint: aws.String(server.URL + "/latest")})
+
+	json.Unmarshal([]byte(instanceIdentityDocument), &iDDocument)
+
+	if region != iDDocument.Region {
+		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iDDocument.Region)
+	}
+	if instanceID != iDDocument.InstanceID {
+		t.Fatalf("Something went wrong expecting instanceID: %v and I've got: %v", instanceID, iDDocument.InstanceID)
+	}
+	if accountID != iDDocument.AccountID {
+		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iDDocument.AccountID)
+	}
+
+}
 
 type mockedGetTagValue struct {
 	ec2iface.EC2API

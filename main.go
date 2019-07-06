@@ -16,8 +16,8 @@ import (
 	"os"
 )
 
-func ec2Metadata() (region, instanceID, accountID string) {
-	client := ec2metadata.New(session.Must(session.NewSession()))
+func ec2Metadata(sess *session.Session, awsCfg *aws.Config) (region, instanceID, accountID string) {
+	client := ec2metadata.New(sess, awsCfg)
 	ec2InstanceIdentifyDocument, _ := client.GetInstanceIdentityDocument()
 	region = ec2InstanceIdentifyDocument.Region
 	instanceID = ec2InstanceIdentifyDocument.InstanceID
@@ -131,7 +131,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	region, instanceID, accountID := ec2Metadata()
+	metaSess := session.Must(session.NewSession())
+	region, instanceID, accountID := ec2Metadata(metaSess, &aws.Config{})
 
 	sess := session.Must(session.NewSession(&aws.Config{Region: aws.String(region)}))
 
