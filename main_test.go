@@ -128,11 +128,7 @@ func TestGetTagValue(t *testing.T) {
 			Region:     "Region",
 		}
 
-		tagValue, err := tv.getTagValue()
-
-		if err != nil {
-			t.Fatalf("%d, unexpected error", err)
-		}
+		tagValue := tv.getTagValue()
 
 		if tagValue != *c.Expected.Value {
 			t.Fatalf("Something went wrong expecting TagValue: %v and I've got: %v", *c.Expected.Value, tagValue)

@@ -32,7 +32,7 @@ type Tag struct {
 	Region     string
 }
 
-func (t *Tag) getTagValue() (value string, err error) {
+func (t *Tag) getTagValue() (value string) {
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{
 			aws.String(t.InstanceId),
@@ -41,17 +41,18 @@ func (t *Tag) getTagValue() (value string, err error) {
 	resp, err := t.Client.DescribeInstances(params)
 	if err != nil {
 		fmt.Printf("%s", err)
-		return "", err
+		os.Exit(1)
 	}
 	if len(resp.Reservations) == 0 {
-		return "", err
+		fmt.Printf("%s", err)
+		os.Exit(1)
 	}
 
 	for idx := range resp.Reservations {
 		for _, inst := range resp.Reservations[idx].Instances {
 			for _, tag := range inst.Tags {
 				if (t.TagName != "") && (*tag.Key == t.TagName) {
-					return *tag.Value, nil
+					return *tag.Value
 				}
 			}
 		}
@@ -72,7 +73,11 @@ func (a *AccessKeyIdSecretAccessKeySessionToken) getAccessKeyIdSecretAccessKeySe
 		RoleArn:         aws.String(a.AuthAccountArn),
 		RoleSessionName: aws.String("auth_keys_cmd_" + a.UserId + "_" + a.AccountID),
 	}
-	result, _ := a.Client.AssumeRole(params)
+	result, err := a.Client.AssumeRole(params)
+	if err != nil {
+		fmt.Printf("%s", err)
+		os.Exit(1)
+	}
 	accessKeyId = *result.Credentials.AccessKeyId
 	secretAccessKey = *result.Credentials.SecretAccessKey
 	sessionToken = *result.Credentials.SessionToken
@@ -107,9 +112,11 @@ func (g *PubKey) listPublicKeys() (pubKeys []*iam.SSHPublicKeyMetadata) {
 	}
 	req, resp := g.Client.ListSSHPublicKeysRequest(param)
 	err := req.Send()
-	if err == nil { // resp is now filled
-		pubKeys = resp.SSHPublicKeys
+	if err != nil {
+		fmt.Printf("%s", err)
+		os.Exit(1)
 	}
+	pubKeys = resp.SSHPublicKeys
 	return
 }
 
@@ -131,8 +138,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	metaSess := session.Must(session.NewSession())
-	region, instanceID, accountID := ec2Metadata(metaSess, &aws.Config{})
+	region, instanceID, accountID := ec2Metadata(session.Must(session.NewSession()), &aws.Config{})
 
 	sess := session.Must(session.NewSession(&aws.Config{Region: aws.String(region)}))
 
@@ -143,7 +149,7 @@ func main() {
 		Region:     region,
 	}
 
-	authAccountArn, _ := t.getTagValue()
+	authAccountArn := t.getTagValue()
 
 	a := AccessKeyIdSecretAccessKeySessionToken{
 		Client:         sts.New(sess),
@@ -181,8 +187,8 @@ func main() {
 	}
 
 	pubKeys := g.listPublicKeys()
-	SshPubKeyID := g.getActivePubKey(pubKeys)
-	if SshPubKeyID != "" {
-		fmt.Println(g.getPubKey(SshPubKeyID))
+	sshPubKeyID := g.getActivePubKey(pubKeys)
+	if sshPubKeyID != "" {
+		fmt.Println(g.getPubKey(sshPubKeyID))
 	}
 }
