@@ -79,7 +79,7 @@ func (a *AccessKeyIdSecretAccessKeySessionToken) getAccessKeyIdSecretAccessKeySe
 	return
 }
 
-type GetPubKey struct {
+type PubKey struct {
 	Client          iamiface.IAMAPI
 	Region          string
 	UserID          string
@@ -88,7 +88,7 @@ type GetPubKey struct {
 	SessionToken    string
 }
 
-func (g *GetPubKey) getPubKey(SshPublicKeyId string) (pubKey string) {
+func (g *PubKey) getPubKey(SshPublicKeyId string) (pubKey string) {
 	params := &iam.GetSSHPublicKeyInput{
 		Encoding:       aws.String("SSH"),
 		SSHPublicKeyId: aws.String(SshPublicKeyId),
@@ -101,20 +101,25 @@ func (g *GetPubKey) getPubKey(SshPublicKeyId string) (pubKey string) {
 	return
 }
 
-func (g *GetPubKey) listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid string) {
+func (g *PubKey) listPublicKeys() (pubKeys []*iam.SSHPublicKeyMetadata) {
 	param := &iam.ListSSHPublicKeysInput{
-		UserName: aws.String(userid),
+		UserName: aws.String(g.UserID),
 	}
 	req, resp := g.Client.ListSSHPublicKeysRequest(param)
 	err := req.Send()
 	if err == nil { // resp is now filled
-		for _, SSHPublicKey := range resp.SSHPublicKeys {
-			if *SSHPublicKey.Status == "Active" {
-				sSHPublicKeyId := *SSHPublicKey.SSHPublicKeyId
-				fmt.Println(g.getPubKey(sSHPublicKeyId))
-			}
+		pubKeys = resp.SSHPublicKeys
+	}
+	return
+}
+
+func (g *PubKey) getActivePubKey(SSHPublicKeys []*iam.SSHPublicKeyMetadata) (sSHPublicKeyID string) {
+	for _, SSHPublicKey := range SSHPublicKeys {
+		if *SSHPublicKey.Status == "Active" {
+			sSHPublicKeyID = *SSHPublicKey.SSHPublicKeyId
 		}
 	}
+	return
 }
 
 func main() {
@@ -165,7 +170,7 @@ func main() {
 			}),
 	}))
 
-	g := GetPubKey{
+	g := PubKey{
 		Client:          iam.New(assumedSess),
 		Region:          region,
 		UserID:          userid,
@@ -174,6 +179,9 @@ func main() {
 		SessionToken:    sessionToken,
 	}
 
-	g.listPublicKeys(region, accessKeyId, secretAccessKey, sessionToken, userid)
-
+	pubKeys := g.listPublicKeys()
+	SshPubKeyID := g.getActivePubKey(pubKeys)
+	if SshPubKeyID != "" {
+		fmt.Println(g.getPubKey(SshPubKeyID))
+	}
 }

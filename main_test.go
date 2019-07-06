@@ -140,7 +140,7 @@ func TestGetPubKey(t *testing.T) {
 			Resp: iam.GetSSHPublicKeyOutput{
 				SSHPublicKey: &iam.SSHPublicKey{
 					Status:           aws.String("Active"),
-					SSHPublicKeyId:   aws.String("oszkar.nagy"),
+					SSHPublicKeyId:   aws.String("user.name"),
 					SSHPublicKeyBody: aws.String("SSHPublicKeyBody"),
 				},
 			},
@@ -151,22 +151,177 @@ func TestGetPubKey(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		pk := GetPubKey{
+		pk := PubKey{
 			Client: mockedGetPubKey{
 				Request: c.Request,
 				Resp:    c.Resp,
 			},
 			Region:          "eu-west-2",
-			UserID:          "oszkar.nagy",
+			UserID:          "user.name",
 			SecretAccessKey: "secrectaccesskey",
 			AccessKeyId:     "accesskeyid",
 			SessionToken:    "sessiontoken",
 		}
 
-		pubKey := pk.getPubKey("oszkar.nagy")
+		pubKey := pk.getPubKey("user.name")
 
 		if pubKey != *c.Expected.SSHPublicKeyBody {
 			t.Fatalf("Something went wrong expecting pubKey: %v and I've got: %v", *c.Expected.SSHPublicKeyBody, pubKey)
+		}
+	}
+}
+
+type mockedListPubKey struct {
+	iamiface.IAMAPI
+	Resp    iam.ListSSHPublicKeysOutput
+	Request request.Request
+}
+
+func (m mockedListPubKey) ListSSHPublicKeysRequest(in *iam.ListSSHPublicKeysInput) (*request.Request, *iam.ListSSHPublicKeysOutput) {
+	return &m.Request, &m.Resp
+}
+
+func TestListPublicKeys(t *testing.T) {
+	cases := []struct {
+		Request  request.Request
+		Resp     iam.ListSSHPublicKeysOutput
+		Expected []*iam.SSHPublicKey
+	}{
+		{
+			Resp: iam.ListSSHPublicKeysOutput{
+				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
+					{
+						Status:         aws.String("Active"),
+						SSHPublicKeyId: aws.String("user1.name"),
+					},
+					{
+						Status:         aws.String("Inactive"),
+						SSHPublicKeyId: aws.String("user2.name"),
+					},
+				},
+			},
+			Expected: []*iam.SSHPublicKey{
+				{
+					Status:         aws.String("Active"),
+					SSHPublicKeyId: aws.String("user1.name"),
+				},
+				{
+					Status:         aws.String("Inactive"),
+					SSHPublicKeyId: aws.String("user2.name"),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		pk := PubKey{
+			Client: mockedListPubKey{
+				Request: c.Request,
+				Resp:    c.Resp,
+			},
+			Region:          "eu-west-2",
+			UserID:          "user.name",
+			SecretAccessKey: "secrectaccesskey",
+			AccessKeyId:     "accesskeyid",
+			SessionToken:    "sessiontoken",
+		}
+
+		for i, PubKey := range pk.listPublicKeys() {
+			if *PubKey.Status != *c.Expected[i].Status {
+				t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", *PubKey.Status, *c.Expected[i].Status)
+			}
+		}
+	}
+}
+
+func TestGetActivePubKeyWithActive(t *testing.T) {
+	cases := []struct {
+		Request  request.Request
+		Resp     iam.ListSSHPublicKeysOutput
+		Expected []*iam.SSHPublicKey
+	}{
+		{
+			Resp: iam.ListSSHPublicKeysOutput{
+				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
+					{
+						Status:         aws.String("Active"),
+						SSHPublicKeyId: aws.String("user1.name"),
+					},
+				},
+			},
+			Expected: []*iam.SSHPublicKey{
+				{
+					Status:         aws.String("Active"),
+					SSHPublicKeyId: aws.String("user1.name"),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		pk := PubKey{
+			Client: mockedListPubKey{
+				Request: c.Request,
+				Resp:    c.Resp,
+			},
+			Region:          "eu-west-2",
+			UserID:          "user.name",
+			SecretAccessKey: "secrectaccesskey",
+			AccessKeyId:     "accesskeyid",
+			SessionToken:    "sessiontoken",
+		}
+
+		pubKey := pk.listPublicKeys()
+		pKey := pk.getActivePubKey(pubKey)
+
+		if pKey != *c.Expected[0].SSHPublicKeyId {
+			t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", pKey, *c.Expected[0].SSHPublicKeyId)
+		}
+	}
+}
+
+func TestGetActivePubKeyWithInctive(t *testing.T) {
+	cases := []struct {
+		Request  request.Request
+		Resp     iam.ListSSHPublicKeysOutput
+		Expected []*iam.SSHPublicKey
+	}{
+		{
+			Resp: iam.ListSSHPublicKeysOutput{
+				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
+					{
+						Status:         aws.String("Inactive"),
+						SSHPublicKeyId: aws.String("user2.name"),
+					},
+				},
+			},
+			Expected: []*iam.SSHPublicKey{
+				{
+					Status:         aws.String("Inactive"),
+					SSHPublicKeyId: aws.String(""),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		pk := PubKey{
+			Client: mockedListPubKey{
+				Request: c.Request,
+				Resp:    c.Resp,
+			},
+			Region:          "eu-west-2",
+			UserID:          "user.name",
+			SecretAccessKey: "secrectaccesskey",
+			AccessKeyId:     "accesskeyid",
+			SessionToken:    "sessiontoken",
+		}
+
+		pubKey := pk.listPublicKeys()
+		pKey := pk.getActivePubKey(pubKey)
+
+		if pKey != *c.Expected[0].SSHPublicKeyId {
+			t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", pKey, *c.Expected[0].SSHPublicKeyId)
 		}
 	}
 }
