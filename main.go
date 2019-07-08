@@ -34,6 +34,7 @@ type Tag struct {
 	Region     string
 }
 
+//Retrieves the ec2 tag-value for the given ec2 tag-name
 func (t *Tag) getTagValue() (value string) {
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{
@@ -69,6 +70,7 @@ type AccessKeyIdSecretAccessKeySessionToken struct {
 	AccountID      string
 }
 
+//Assumes the AWS role and retrieves the temporary credentials
 func (a *AccessKeyIdSecretAccessKeySessionToken) getAccessKeyIdSecretAccessKeySessionToken() (accessKeyId, secretAccessKey, sessionToken string) {
 	params := &sts.AssumeRoleInput{
 		DurationSeconds: aws.Int64(3600),
@@ -95,6 +97,7 @@ type PubKey struct {
 	SessionToken    string
 }
 
+//Retrieves the given user public key id
 func (g *PubKey) getPubKey(SshPublicKeyId string) (pubKey string) {
 	params := &iam.GetSSHPublicKeyInput{
 		Encoding:       aws.String("SSH"),
@@ -108,6 +111,7 @@ func (g *PubKey) getPubKey(SshPublicKeyId string) (pubKey string) {
 	return
 }
 
+//List the given user public keys
 func (g *PubKey) listPublicKeys() (pubKeys []*iam.SSHPublicKeyMetadata) {
 	param := &iam.ListSSHPublicKeysInput{
 		UserName: aws.String(g.UserID),
@@ -122,10 +126,11 @@ func (g *PubKey) listPublicKeys() (pubKeys []*iam.SSHPublicKeyMetadata) {
 	return
 }
 
-func (g *PubKey) getActivePubKey(SSHPublicKeys []*iam.SSHPublicKeyMetadata) (sSHPublicKeyID string) {
+//Filters only the active user public keys
+func (g *PubKey) getActivePubKey(SSHPublicKeys []*iam.SSHPublicKeyMetadata) (sSHPublicKeyID []string) {
 	for _, SSHPublicKey := range SSHPublicKeys {
 		if *SSHPublicKey.Status == "Active" {
-			sSHPublicKeyID = *SSHPublicKey.SSHPublicKeyId
+			sSHPublicKeyID = append(sSHPublicKeyID, *SSHPublicKey.SSHPublicKeyId)
 		}
 	}
 	return
@@ -133,6 +138,7 @@ func (g *PubKey) getActivePubKey(SSHPublicKeys []*iam.SSHPublicKeyMetadata) (sSH
 
 func main() {
 
+	//CLI menu
 	userid := ""
 	if os.Args[1] == "--version" {
 		fmt.Printf("Authorized Keys Command Version: %s\n", version)
@@ -143,8 +149,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	//Get information from metadata service
 	region, instanceID, accountID := ec2Metadata(session.Must(session.NewSession()), &aws.Config{})
 
+	//Create AWS api session
 	sess := session.Must(session.NewSession(&aws.Config{Region: aws.String(region)}))
 
 	t := Tag{
@@ -154,6 +162,7 @@ func main() {
 		Region:     region,
 	}
 
+	//Get Auth Account Arn for the EC2 tag
 	authAccountArn := t.getTagValue()
 
 	a := AccessKeyIdSecretAccessKeySessionToken{
@@ -163,6 +172,7 @@ func main() {
 		AccountID:      accountID,
 	}
 
+	//Get temporary credentials
 	accessKeyId, secretAccessKey, sessionToken := a.getAccessKeyIdSecretAccessKeySessionToken()
 
 	assumedSess := session.Must(session.NewSession(&aws.Config{
@@ -191,9 +201,12 @@ func main() {
 		SessionToken:    sessionToken,
 	}
 
+	//Print out the public key/s if there is an active one available
 	pubKeys := g.listPublicKeys()
-	sshPubKeyID := g.getActivePubKey(pubKeys)
-	if sshPubKeyID != "" {
-		fmt.Println(g.getPubKey(sshPubKeyID))
+	sshPubKeyIDs := g.getActivePubKey(pubKeys)
+	for _, sshPubKeyID := range sshPubKeyIDs {
+		if sshPubKeyID != "" {
+			fmt.Println(g.getPubKey(sshPubKeyID))
+		}
 	}
 }

@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+//----------------------------------------------- TestEC2Metadata ------------------------------------------------------
+
 const instanceIdentityDocument = `{
   "availabilityZone" : "us-east-1d",
   "privateIp" : "10.158.112.84",
@@ -33,7 +35,7 @@ const instanceIdentityDocument = `{
   "architecture" : "x86_64"
 }`
 
-type IIDocument struct {
+type IntanceIdentityDocument struct {
 	AvailabilityZone string      `json:"availabilityZone"`
 	PrivateIP        string      `json:"privateIp"`
 	Version          string      `json:"version"`
@@ -49,8 +51,9 @@ type IIDocument struct {
 	Architecture     string      `json:"architecture"`
 }
 
-var iIDocument IIDocument
+var iIDocument IntanceIdentityDocument
 
+//Run up the mock HTTP server
 func initTestServer(path string, resp string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI != path {
@@ -79,10 +82,12 @@ func TestEC2Metadata(t *testing.T) {
 		t.Fatalf("Something went wrong expecting instanceID: %v and I've got: %v", instanceID, iIDocument.InstanceID)
 	}
 	if accountID != iIDocument.AccountID {
-		t.Fatalf("Something went wrong expecting region: %v and I've got: %v", region, iIDocument.AccountID)
+		t.Fatalf("Something went wrong expecting accountID: %v and I've got: %v", region, iIDocument.AccountID)
 	}
 
 }
+
+//--------------------------------------------------- TestGetTagValue --------------------------------------------------
 
 type mockedGetTagValue struct {
 	ec2iface.EC2API
@@ -107,7 +112,7 @@ func TestGetTagValue(t *testing.T) {
 								Tags: []*ec2.Tag{
 									{
 										Key:   aws.String("auth-account-arn"),
-										Value: aws.String("arn:aws:iam::434342352745:role/RoleCrossAccountSSH")},
+										Value: aws.String("arn:aws:iam::434342352745:role/RoleSomeSSH")},
 								},
 							},
 						},
@@ -115,7 +120,7 @@ func TestGetTagValue(t *testing.T) {
 				},
 			},
 			Expected: ec2.Tag{
-				Value: aws.String("arn:aws:iam::434342352745:role/RoleCrossAccountSSH"),
+				Value: aws.String("arn:aws:iam::434342352745:role/RoleSomeSSH"),
 			},
 		},
 	}
@@ -135,6 +140,8 @@ func TestGetTagValue(t *testing.T) {
 		}
 	}
 }
+
+//--------------------------------- TestGetAccessKeyIdSecretAccessKeySessionToken --------------------------------------
 
 type mockedAccessKeyIdSecretAccessKeySessionToken struct {
 	stsiface.STSAPI
@@ -188,6 +195,8 @@ func TestGetAccessKeyIdSecretAccessKeySessionToken(t *testing.T) {
 	}
 }
 
+//---------------------------------------------------- TestGetPubKey ---------------------------------------------------
+
 type mockedGetPubKey struct {
 	iamiface.IAMAPI
 	Resp    iam.GetSSHPublicKeyOutput
@@ -236,6 +245,8 @@ func TestGetPubKey(t *testing.T) {
 		}
 	}
 }
+
+//---------------------------------------------- TestListPublicKeys ----------------------------------------------------
 
 type mockedListPubKey struct {
 	iamiface.IAMAPI
@@ -300,6 +311,8 @@ func TestListPublicKeys(t *testing.T) {
 	}
 }
 
+//------------------------------------------- TestGetActivePubKeyWithActive --------------------------------------------
+
 func TestGetActivePubKeyWithActive(t *testing.T) {
 	cases := []struct {
 		Request  request.Request
@@ -313,11 +326,18 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 						Status:         aws.String("Active"),
 						SSHPublicKeyId: aws.String("user1.name"),
 					},
+					{
+						Status:         aws.String("Inactive"),
+						SSHPublicKeyId: aws.String("user2.name"),
+					},
 				},
 			},
 			Expected: []*iam.SSHPublicKey{
 				{
 					SSHPublicKeyId: aws.String("user1.name"),
+				},
+				{
+					SSHPublicKeyId: aws.String("user2.name"),
 				},
 			},
 		},
@@ -336,14 +356,18 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 			SessionToken:    "sessiontoken",
 		}
 
-		pubKey := pk.listPublicKeys()
-		pKey := pk.getActivePubKey(pubKey)
+		publicKeys := pk.listPublicKeys()
+		activePubKeys := pk.getActivePubKey(publicKeys)
 
-		if pKey != *c.Expected[0].SSHPublicKeyId {
-			t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", pKey, *c.Expected[0].SSHPublicKeyId)
+		for i, activePubKey := range activePubKeys {
+			if activePubKey != *c.Expected[i].SSHPublicKeyId {
+				t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", activePubKey, *c.Expected[i].SSHPublicKeyId)
+			}
 		}
 	}
 }
+
+//------------------------------------------- TestGetActivePubKeyWithInctive -------------------------------------------
 
 func TestGetActivePubKeyWithInctive(t *testing.T) {
 	cases := []struct {
@@ -356,11 +380,18 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
 					{
 						Status:         aws.String("Inactive"),
+						SSHPublicKeyId: aws.String("user1.name"),
+					},
+					{
+						Status:         aws.String("Inactive"),
 						SSHPublicKeyId: aws.String("user2.name"),
 					},
 				},
 			},
 			Expected: []*iam.SSHPublicKey{
+				{
+					SSHPublicKeyId: aws.String(""),
+				},
 				{
 					SSHPublicKeyId: aws.String(""),
 				},
@@ -381,11 +412,13 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 			SessionToken:    "sessiontoken",
 		}
 
-		pubKey := pk.listPublicKeys()
-		pKey := pk.getActivePubKey(pubKey)
+		publicKeys := pk.listPublicKeys()
+		activePublicKeys := pk.getActivePubKey(publicKeys)
 
-		if pKey != *c.Expected[0].SSHPublicKeyId {
-			t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", pKey, *c.Expected[0].SSHPublicKeyId)
+		for i, activePubKey := range activePublicKeys {
+			if activePubKey != *c.Expected[i].SSHPublicKeyId {
+				t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", activePubKey, *c.Expected[i].SSHPublicKeyId)
+			}
 		}
 	}
 }
