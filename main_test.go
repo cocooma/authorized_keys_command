@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -238,7 +239,7 @@ func TestGetPubKey(t *testing.T) {
 			SessionToken:    "sessiontoken",
 		}
 
-		pubKey := pk.getPubKey("user.name")
+		pubKey := pk.getPubKey("APKAJCRV73AHPLOJ6VZQ")
 
 		if pubKey != *c.Expected.SSHPublicKeyBody {
 			t.Fatalf("Something went wrong expecting pubKey: %v and I've got: %v", *c.Expected.SSHPublicKeyBody, pubKey)
@@ -269,22 +270,24 @@ func TestListPublicKeys(t *testing.T) {
 				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
 					{
 						Status:         aws.String("Active"),
-						SSHPublicKeyId: aws.String("user1.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZQ"),
+						UserName:       aws.String("user.name"),
 					},
 					{
 						Status:         aws.String("Inactive"),
-						SSHPublicKeyId: aws.String("user2.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZA"),
+						UserName:       aws.String("user.name"),
 					},
 				},
 			},
 			Expected: []*iam.SSHPublicKey{
 				{
 					Status:         aws.String("Active"),
-					SSHPublicKeyId: aws.String("user1.name"),
+					SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZQ"),
 				},
 				{
 					Status:         aws.String("Inactive"),
-					SSHPublicKeyId: aws.String("user2.name"),
+					SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZA"),
 				},
 			},
 		},
@@ -324,27 +327,30 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
 					{
 						Status:         aws.String("Active"),
-						SSHPublicKeyId: aws.String("user1.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZQ"),
+						UserName:       aws.String("user.name"),
 					},
 					{
 						Status:         aws.String("Active"),
-						SSHPublicKeyId: aws.String("user2.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZA"),
+						UserName:       aws.String("user.name"),
 					},
 					{
 						Status:         aws.String("Inactive"),
-						SSHPublicKeyId: aws.String("user3.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZB"),
+						UserName:       aws.String("user.name"),
 					},
 				},
 			},
 			Expected: []*iam.SSHPublicKey{
 				{
-					SSHPublicKeyId: aws.String("user1.name"),
+					SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZQ"),
 				},
 				{
-					SSHPublicKeyId: aws.String("user2.name"),
+					SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZA"),
 				},
 				{
-					SSHPublicKeyId: aws.String("user3.name"),
+					SSHPublicKeyId: aws.String(""),
 				},
 			},
 		},
@@ -365,6 +371,8 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 
 		publicKeys := pk.listPublicKeys()
 		activePubKeys := pk.getActivePubKey(publicKeys)
+
+		assert.Equal(t, len(activePubKeys), 2, "The number of public keys should be 2.")
 
 		for i, activePubKey := range activePubKeys {
 			if activePubKey != *c.Expected[i].SSHPublicKeyId {
@@ -387,15 +395,18 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
 					{
 						Status:         aws.String("Inactive"),
-						SSHPublicKeyId: aws.String("user1.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZQ"),
+						UserName:       aws.String("user.name"),
 					},
 					{
 						Status:         aws.String("Inactive"),
-						SSHPublicKeyId: aws.String("user2.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZA"),
+						UserName:       aws.String("user.name"),
 					},
 					{
 						Status:         aws.String("Inactive"),
-						SSHPublicKeyId: aws.String("user3.name"),
+						SSHPublicKeyId: aws.String("APKAJCRV73AHPLOJ6VZB"),
+						UserName:       aws.String("user.name"),
 					},
 				},
 			},
@@ -428,6 +439,8 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 
 		publicKeys := pk.listPublicKeys()
 		activePublicKeys := pk.getActivePubKey(publicKeys)
+
+		assert.Equal(t, len(activePublicKeys), 0, "The number of public keys should be 0.")
 
 		for i, activePubKey := range activePublicKeys {
 			if activePubKey != *c.Expected[i].SSHPublicKeyId {
