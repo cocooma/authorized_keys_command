@@ -327,8 +327,12 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 						SSHPublicKeyId: aws.String("user1.name"),
 					},
 					{
-						Status:         aws.String("Inactive"),
+						Status:         aws.String("Active"),
 						SSHPublicKeyId: aws.String("user2.name"),
+					},
+					{
+						Status:         aws.String("Inactive"),
+						SSHPublicKeyId: aws.String("user3.name"),
 					},
 				},
 			},
@@ -338,6 +342,9 @@ func TestGetActivePubKeyWithActive(t *testing.T) {
 				},
 				{
 					SSHPublicKeyId: aws.String("user2.name"),
+				},
+				{
+					SSHPublicKeyId: aws.String("user3.name"),
 				},
 			},
 		},
@@ -386,9 +393,16 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 						Status:         aws.String("Inactive"),
 						SSHPublicKeyId: aws.String("user2.name"),
 					},
+					{
+						Status:         aws.String("Inactive"),
+						SSHPublicKeyId: aws.String("user3.name"),
+					},
 				},
 			},
 			Expected: []*iam.SSHPublicKey{
+				{
+					SSHPublicKeyId: aws.String(""),
+				},
 				{
 					SSHPublicKeyId: aws.String(""),
 				},
