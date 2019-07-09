@@ -43,11 +43,11 @@ func (t *Tag) getTagValue() (value string) {
 	}
 	resp, err := t.Client.DescribeInstances(params)
 	if err != nil {
-		fmt.Printf("%s", err)
+		fmt.Printf("%s\n", err)
 		os.Exit(1)
 	}
 	if len(resp.Reservations) == 0 {
-		fmt.Printf("%s", err)
+		fmt.Printf("%s\n", err)
 		os.Exit(1)
 	}
 
@@ -79,7 +79,7 @@ func (a *AccessKeyIdSecretAccessKeySessionToken) getAccessKeyIdSecretAccessKeySe
 	}
 	result, err := a.Client.AssumeRole(params)
 	if err != nil {
-		fmt.Printf("%s", err)
+		fmt.Printf("%s\n", err)
 		os.Exit(1)
 	}
 	accessKeyId = *result.Credentials.AccessKeyId
@@ -119,7 +119,7 @@ func (g *PubKey) listPublicKeys() (pubKeys []*iam.SSHPublicKeyMetadata) {
 	req, resp := g.Client.ListSSHPublicKeysRequest(param)
 	err := req.Send()
 	if err != nil {
-		fmt.Printf("%s", err)
+		fmt.Printf("%s\n", err)
 		os.Exit(1)
 	}
 	pubKeys = resp.SSHPublicKeys
@@ -140,13 +140,14 @@ func main() {
 
 	//CLI menu
 	userid := ""
-	if os.Args[1] == "--version" {
+	if len(os.Args) > 1 {
+		userid = os.Args[1]
+	} else if userid == "--version" {
 		fmt.Printf("Authorized Keys Command Version: %s\n", version)
 		os.Exit(0)
-	} else if len(os.Args) > 1 {
-		userid = os.Args[1]
 	} else {
-		os.Exit(0)
+		fmt.Println("Wrong cli argument!")
+		os.Exit(1)
 	}
 
 	//Get information from metadata service

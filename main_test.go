@@ -247,7 +247,7 @@ func TestGetPubKey(t *testing.T) {
 	}
 }
 
-//---------------------------------------------- TestListPublicKeys ----------------------------------------------------
+//----------------------------------------- Setup for List PublicKeys tests --------------------------------------------
 
 type mockedListPubKey struct {
 	iamiface.IAMAPI
@@ -258,6 +258,8 @@ type mockedListPubKey struct {
 func (m mockedListPubKey) ListSSHPublicKeysRequest(in *iam.ListSSHPublicKeysInput) (*request.Request, *iam.ListSSHPublicKeysOutput) {
 	return &m.Request, &m.Resp
 }
+
+//---------------------------------------------- TestListPublicKeys ----------------------------------------------------
 
 func TestListPublicKeys(t *testing.T) {
 	cases := []struct {
@@ -417,6 +419,54 @@ func TestGetActivePubKeyWithInctive(t *testing.T) {
 				{
 					SSHPublicKeyId: aws.String(""),
 				},
+				{
+					SSHPublicKeyId: aws.String(""),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		pk := PubKey{
+			Client: mockedListPubKey{
+				Request: c.Request,
+				Resp:    c.Resp,
+			},
+			Region:          "eu-west-2",
+			UserID:          "user.name",
+			SecretAccessKey: "secrectaccesskey",
+			AccessKeyId:     "accesskeyid",
+			SessionToken:    "sessiontoken",
+		}
+
+		publicKeys := pk.listPublicKeys()
+		activePublicKeys := pk.getActivePubKey(publicKeys)
+
+		assert.Equal(t, len(activePublicKeys), 0, "The number of public keys should be 0.")
+
+		for i, activePubKey := range activePublicKeys {
+			if activePubKey != *c.Expected[i].SSHPublicKeyId {
+				t.Fatalf("Something went wrong expecting pubKey Staus: %v and I've got: %v", activePubKey, *c.Expected[i].SSHPublicKeyId)
+			}
+		}
+	}
+}
+
+//--------------------------------------- TestGetActivePubKeyWithNoPublicKeys ------------------------------------------
+
+func TestGetActivePubKeyWithNoPublicKeys(t *testing.T) {
+	cases := []struct {
+		Request  request.Request
+		Resp     iam.ListSSHPublicKeysOutput
+		Expected []*iam.SSHPublicKey
+	}{
+		{
+			Resp: iam.ListSSHPublicKeysOutput{
+				SSHPublicKeys: []*iam.SSHPublicKeyMetadata{
+				//	No public keys
+				},
+			},
+			Expected: []*iam.SSHPublicKey{
 				{
 					SSHPublicKeyId: aws.String(""),
 				},
